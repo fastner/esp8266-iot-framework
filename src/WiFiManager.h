@@ -19,18 +19,20 @@ private:
     bool reconnect = false;
     bool inCaptivePortal = false;
     char const *captivePortalName;
+    char const *captivePortalPassword;
     unsigned long timeout = 60000;
-    
-    void startCaptivePortal(char const *apName);
+
+    void startCaptivePortal(char const *apName, char const *apPassword);
     void stopCaptivePortal();
-    void connectNewWifi(String newSSID, String newPass);    
+    void connectNewWifi(String newSSID, String newPass);
     void storeToEEPROM();
     int8_t waitForConnectResult(unsigned long timeoutLength);
     std::function<void()> _forgetwificallback;
     std::function<void()> _newwificallback;    
 
-public : 
+public:
     void begin(char const *apName, unsigned long newTimeout = 60000);
+    void begin(char const *apName, char const *apPassword, unsigned long newTimeout = 60000);
     void loop();
     void forget();
     bool isCaptivePortal();
@@ -44,5 +46,3 @@ public :
 extern WifiManager WiFiManager;
 
 #endif
-
-

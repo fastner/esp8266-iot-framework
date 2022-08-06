@@ -1,4 +1,4 @@
-//inspired by https://github.com/tzapu/WiFiManager but 
+// inspired by https://github.com/tzapu/WiFiManager but
 //- with more flexibility to add your own web server setup
 //= state machine for changing wifi settings on the fly
 
@@ -7,19 +7,20 @@
 #include "WiFiManager.h"
 #include "configManager.h"
 
-//create global object
+// create global object
 WifiManager WiFiManager;
 
-//function to call in setup
-void WifiManager::begin(char const *apName, unsigned long newTimeout)
+// function to call in setup
+void WifiManager::begin(char const *apName, char const *apPassword, unsigned long newTimeout)
 {
     captivePortalName = apName;
+    captivePortalPassword = apPassword;
     timeout = newTimeout;
-    
+
     WiFi.mode(WIFI_STA);
     WiFi.persistent(true);
-    
-    //set static IP if entered
+
+    // set static IP if entered
     ip = IPAddress(configManager.internal.ip);
     gw = IPAddress(configManager.internal.gw);
     sub = IPAddress(configManager.internal.sub);
@@ -33,7 +34,7 @@ void WifiManager::begin(char const *apName, unsigned long newTimeout)
 
     if (WiFi.SSID() != "")
     {
-        //trying to fix connection in progress hanging
+        // trying to fix connection in progress hanging
         ETS_UART_INTR_DISABLE();
         wifi_station_disconnect();
         ETS_UART_INTR_ENABLE();
@@ -42,59 +43,69 @@ void WifiManager::begin(char const *apName, unsigned long newTimeout)
 
     if (waitForConnectResult(timeout) == WL_CONNECTED)
     {
-        //connected
+        // connected
         Serial.println(PSTR("Connected to stored WiFi details"));
         Serial.println(WiFi.localIP());
     }
     else
     {
-        //captive portal
-        startCaptivePortal(captivePortalName);
+        // captive portal
+        startCaptivePortal(captivePortalName, captivePortalPassword);
     }
 }
 
-//Upgraded default waitForConnectResult function to incorporate WL_NO_SSID_AVAIL, fixes issue #122
-int8_t WifiManager::waitForConnectResult(unsigned long timeoutLength) {
-    //1 and 3 have STA enabled
-    if((wifi_get_opmode() & 1) == 0) {
+void WifiManager::begin(char const *apName, unsigned long newTimeout)
+{
+    this->begin(apName, newTimeout);
+}
+
+// Upgraded default waitForConnectResult function to incorporate WL_NO_SSID_AVAIL, fixes issue #122
+int8_t WifiManager::waitForConnectResult(unsigned long timeoutLength)
+{
+    // 1 and 3 have STA enabled
+    if ((wifi_get_opmode() & 1) == 0)
+    {
         return WL_DISCONNECTED;
     }
     using esp8266::polledTimeout::oneShot;
     oneShot timeout(timeoutLength); // number of milliseconds to wait before returning timeout error
-    while(!timeout) {
+    while (!timeout)
+    {
         yield();
-        if(WiFi.status() != WL_DISCONNECTED && WiFi.status() != WL_NO_SSID_AVAIL) {
+        if (WiFi.status() != WL_DISCONNECTED && WiFi.status() != WL_NO_SSID_AVAIL)
+        {
             return WiFi.status();
         }
     }
     return -1; // -1 indicates timeout
 }
 
-//function to forget current WiFi details and start a captive portal
+// function to forget current WiFi details and start a captive portal
 void WifiManager::forget()
-{ 
+{
     WiFi.disconnect();
-    startCaptivePortal(captivePortalName);
+    startCaptivePortal(captivePortalName, captivePortalPassword);
 
-    //remove IP address from EEPROM
+    // remove IP address from EEPROM
     ip = IPAddress();
     sub = IPAddress();
     gw = IPAddress();
     dns = IPAddress();
 
-    //make EEPROM empty
+    // make EEPROM empty
     storeToEEPROM();
 
-    if ( _forgetwificallback != NULL) {
+    if (_forgetwificallback != NULL)
+    {
         _forgetwificallback();
-    } 
+    }
 
     Serial.println(PSTR("Requested to forget WiFi. Started Captive portal."));
 }
 
-//function to request a connection to new WiFi credentials
+// function to request a connection to new WiFi credentials
 void WifiManager::setNewWifi(String newSSID, String newPass)
-{    
+{
     ssid = newSSID;
     pass = newPass;
     ip = IPAddress();
@@ -105,7 +116,7 @@ void WifiManager::setNewWifi(String newSSID, String newPass)
     reconnect = true;
 }
 
-//function to request a connection to new WiFi credentials
+// function to request a connection to new WiFi credentials
 void WifiManager::setNewWifi(String newSSID, String newPass, String newIp, String newSub, String newGw, String newDns)
 {
     ssid = newSSID;
@@ -118,23 +129,23 @@ void WifiManager::setNewWifi(String newSSID, String newPass, String newIp, Strin
     reconnect = true;
 }
 
-//function to connect to new WiFi credentials
+// function to connect to new WiFi credentials
 void WifiManager::connectNewWifi(String newSSID, String newPass)
 {
     delay(1000);
 
-    //set static IP or zeros if undefined    
+    // set static IP or zeros if undefined
     WiFi.config(ip, gw, sub, dns);
 
-    //fix for auto connect racing issue
-    if (!(WiFi.status() == WL_CONNECTED && (WiFi.SSID() == newSSID)) || ip.v4() != configManager.internal.ip  || dns.v4() != configManager.internal.dns)
-    {          
-        //trying to fix connection in progress hanging
+    // fix for auto connect racing issue
+    if (!(WiFi.status() == WL_CONNECTED && (WiFi.SSID() == newSSID)) || ip.v4() != configManager.internal.ip || dns.v4() != configManager.internal.dns)
+    {
+        // trying to fix connection in progress hanging
         ETS_UART_INTR_DISABLE();
         wifi_station_disconnect();
         ETS_UART_INTR_ENABLE();
 
-        //store old data in case new network is wrong
+        // store old data in case new network is wrong
         String oldSSID = WiFi.SSID();
         String oldPSK = WiFi.psk();
 
@@ -143,7 +154,7 @@ void WifiManager::connectNewWifi(String newSSID, String newPass)
 
         if (WiFi.waitForConnectResult(timeout) != WL_CONNECTED)
         {
-            
+
             Serial.println(PSTR("New connection unsuccessful"));
             if (!inCaptivePortal)
             {
@@ -151,9 +162,9 @@ void WifiManager::connectNewWifi(String newSSID, String newPass)
                 if (WiFi.waitForConnectResult(timeout) != WL_CONNECTED)
                 {
                     Serial.println(PSTR("Reconnection failed too"));
-                    startCaptivePortal(captivePortalName);
+                    startCaptivePortal(captivePortalName, captivePortalPassword);
                 }
-                else 
+                else
                 {
                     Serial.println(PSTR("Reconnection successful"));
                     Serial.println(WiFi.localIP());
@@ -170,19 +181,19 @@ void WifiManager::connectNewWifi(String newSSID, String newPass)
             Serial.println(PSTR("New connection successful"));
             Serial.println(WiFi.localIP());
 
-            //store IP address in EEProm
+            // store IP address in EEProm
             storeToEEPROM();
 
-            if ( _newwificallback != NULL) {
+            if (_newwificallback != NULL)
+            {
                 _newwificallback();
             }
-
         }
     }
 }
 
-//function to start the captive portal
-void WifiManager::startCaptivePortal(char const *apName)
+// function to start the captive portal
+void WifiManager::startCaptivePortal(char const *apName, char const *apPassword)
 {
     WiFi.persistent(false);
     // disconnect sta, start ap
@@ -190,7 +201,7 @@ void WifiManager::startCaptivePortal(char const *apName)
     WiFi.mode(WIFI_AP);
     WiFi.persistent(true);
 
-    WiFi.softAP(apName);
+    WiFi.softAP(apName, apPassword);
 
     dnsServer = new DNSServer();
 
@@ -201,44 +212,45 @@ void WifiManager::startCaptivePortal(char const *apName)
     Serial.println(PSTR("Opened a captive portal"));
     Serial.println(PSTR("192.168.4.1"));
     inCaptivePortal = true;
-
 }
 
-//function to stop the captive portal
+// function to stop the captive portal
 void WifiManager::stopCaptivePortal()
-{    
+{
     WiFi.mode(WIFI_STA);
     delete dnsServer;
 
     inCaptivePortal = false;
 }
 
-void  WifiManager::forgetWiFiFunctionCallback( std::function<void()> func ) {
-  _forgetwificallback = func;
+void WifiManager::forgetWiFiFunctionCallback(std::function<void()> func)
+{
+    _forgetwificallback = func;
 }
 
-void WifiManager::newWiFiFunctionCallback( std::function<void()> func ) {
-  _newwificallback = func;
+void WifiManager::newWiFiFunctionCallback(std::function<void()> func)
+{
+    _newwificallback = func;
 }
 
-//return captive portal state
+// return captive portal state
 bool WifiManager::isCaptivePortal()
 {
     return inCaptivePortal;
 }
 
-//return current SSID
+// return current SSID
 String WifiManager::SSID()
-{    
+{
     return WiFi.SSID();
 }
 
-//captive portal loop
+// captive portal loop
 void WifiManager::loop()
 {
     if (inCaptivePortal)
     {
-        //captive portal loop
+        // captive portal loop
         dnsServer->processNextRequest();
     }
 
@@ -247,10 +259,9 @@ void WifiManager::loop()
         connectNewWifi(ssid, pass);
         reconnect = false;
     }
-    
 }
 
-//update IP address in EEPROM
+// update IP address in EEPROM
 void WifiManager::storeToEEPROM()
 {
     configManager.internal.ip = ip.v4();
@@ -259,4 +270,3 @@ void WifiManager::storeToEEPROM()
     configManager.internal.dns = dns.v4();
     configManager.save();
 }
-

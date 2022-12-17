@@ -56,7 +56,7 @@ void WifiManager::begin(char const *apName, char const *apPassword, unsigned lon
 
 void WifiManager::begin(char const *apName, unsigned long newTimeout)
 {
-    this->begin(apName, newTimeout);
+    this->begin(apName, "", newTimeout);
 }
 
 // Upgraded default waitForConnectResult function to incorporate WL_NO_SSID_AVAIL, fixes issue #122
